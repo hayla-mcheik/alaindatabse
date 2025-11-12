@@ -128,14 +128,7 @@
                 <span v-else>Export Data</span>
             </button>
 
-            <button 
-                type="button"
-                @click="clearAll"
-                :disabled="clearAllForm.processing"
-                class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700 focus:bg-red-700 active:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
-            >
-                Clear All Data
-            </button>
+
         </div>
     </form>
 </div>
@@ -175,7 +168,7 @@
                 multiple    
                 class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-32"
             >
-                <option value="">All Countries</option>
+                <!-- <option value="">All Countries</option> -->
                 <option v-for="country in countries" :key="country" :value="country">
                     {{ country }}
                 </option>
@@ -258,7 +251,7 @@
                 </div>
             </div>
 
-            <!-- Records Table -->
+               <!-- Records Table -->
             <div class="bg-white rounded-lg shadow-md overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -270,8 +263,14 @@
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Agency
                                 </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Budget
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                                    @click="sortByBudget">
+                                    <div class="flex items-center">
+                                        Budget
+                                        <span v-if="sortField === 'budget'" class="ml-1">
+                                            {{ sortDirection === 'desc' ? '↓' : '↑' }}
+                                        </span>
+                                    </div>
                                 </th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Platform
@@ -279,8 +278,6 @@
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Country
                                 </th>
-                         
-                
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
@@ -304,7 +301,6 @@
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ record.country }}
                                 </td>
-                        
                             </tr>
                             <tr v-if="!records?.data || records.data.length === 0">
                                 <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">
@@ -316,37 +312,37 @@
                 </div>
 
                 <!-- Pagination -->
-<div v-if="records?.links && records.links.length > 1" class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
-    <div class="flex justify-between items-center">
-        <div class="text-sm text-gray-700">
-            Showing {{ records.from || 0 }} to {{ records.to || 0 }} of {{ records.total || 0 }} results
-        </div>
-        <div class="space-x-2">
-            <template v-for="link in records.links" :key="link.label">
-                <Link 
-                    v-if="link.url"
-                    :href="link.url + getFilterQueryString()"
-                    :class="{
-                        'bg-blue-600 text-white': link.active,
-                        'text-gray-500 hover:text-gray-700': !link.active
-                    }"
-                    class="px-3 py-1 rounded-md text-sm font-medium"
-                    v-html="link.label"
-                    preserve-state
-                />
-                <span 
-                    v-else
-                    :class="{
-                        'bg-gray-200 text-gray-500': link.active,
-                        'text-gray-400': !link.active
-                    }"
-                    class="px-3 py-1 rounded-md text-sm font-medium cursor-not-allowed"
-                    v-html="link.label"
-                />
-            </template>
-        </div>
-    </div>
-</div>
+                <div v-if="records?.links && records.links.length > 1" class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+                    <div class="flex justify-between items-center">
+                        <div class="text-sm text-gray-700">
+                            Showing {{ records.from || 0 }} to {{ records.to || 0 }} of {{ records.total || 0 }} results
+                        </div>
+                        <div class="space-x-2">
+                            <template v-for="link in records.links" :key="link.label">
+                                <Link 
+                                    v-if="link.url"
+                                    :href="link.url + getFilterQueryString() + getSortQueryString()"
+                                    :class="{
+                                        'bg-blue-600 text-white': link.active,
+                                        'text-gray-500 hover:text-gray-700': !link.active
+                                    }"
+                                    class="px-3 py-1 rounded-md text-sm font-medium"
+                                    v-html="link.label"
+                                    preserve-state
+                                />
+                                <span 
+                                    v-else
+                                    :class="{
+                                        'bg-gray-200 text-gray-500': link.active,
+                                        'text-gray-400': !link.active
+                                    }"
+                                    class="px-3 py-1 rounded-md text-sm font-medium cursor-not-allowed"
+                                    v-html="link.label"
+                                />
+                            </template>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </AuthenticatedLayout>
@@ -382,56 +378,67 @@ const props = defineProps({
     filters: {
         type: Object,
         default: () => ({})
+    },
+    sort: {
+        type: String,
+        default: 'budget'
+    },
+    direction: {
+        type: String,
+        default: 'desc'
     }
 });
 
-// Add method to clear errors
-const clearErrors = () => {
-    router.reload();
-};
+// Add sorting state
+const sortField = ref(props.sort || 'budget');
+const sortDirection = ref(props.direction || 'desc');
 
-// Add method to format field names
-const formatFieldName = (field) => {
-    const fieldMap = {
-        'client': 'Client',
-        'agency': 'Agency',
-        'budget': 'Budget',
-        'platform': 'Platform',
-        'country': 'Country',
-        'General': 'General Error'
-    };
-    return fieldMap[field] || field;
-};
-
-// Format agency display
-const formatAgency = (agency) => {
-    if (!agency || agency === 'direct' || agency === 'Unknown Agency') {
-        return 'Direct';
+// Add method to sort by budget
+const sortByBudget = () => {
+    if (sortField.value === 'budget') {
+        // Toggle direction if already sorting by budget
+        sortDirection.value = sortDirection.value === 'desc' ? 'asc' : 'desc';
+    } else {
+        // Switch to budget sorting
+        sortField.value = 'budget';
+        sortDirection.value = 'desc'; // Default to descending (highest first)
     }
-    return agency;
+    
+    // Update URL with sort parameters
+    const urlFilters = { ...filters.value };
+    
+    // Remove empty arrays and strings
+    Object.keys(urlFilters).forEach(key => {
+        if (Array.isArray(urlFilters[key]) && urlFilters[key].length === 0) {
+            delete urlFilters[key];
+        } else if (urlFilters[key] === '' || urlFilters[key] === null || urlFilters[key] === undefined) {
+            delete urlFilters[key];
+        }
+    });
+
+    // Add sort parameters
+    urlFilters.sort = sortField.value;
+    urlFilters.direction = sortDirection.value;
+
+    router.get('/analytics', urlFilters, {
+        preserveState: true,
+        replace: true,
+        preserveScroll: true,
+    });
 };
 
-// Agency badge styling
-const getAgencyBadgeClass = (agency) => {
-    if (!agency || agency === 'direct' || agency === 'Unknown Agency') {
-        return 'bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium';
-    }
-    return 'text-gray-900';
+// Update getSortQueryString method
+const getSortQueryString = () => {
+    return `&sort=${sortField.value}&direction=${sortDirection.value}`;
 };
 
-// Method to remove a country from selection
-const removeCountry = (countryToRemove) => {
-    filters.value.countries = filters.value.countries.filter(country => country !== countryToRemove);
-};
-
-// Method to build filter query string for pagination
+// Update getFilterQueryString to include sort
 const getFilterQueryString = () => {
     const params = new URLSearchParams();
     
     Object.keys(filters.value).forEach(key => {
         if (filters.value[key]) {
             if (Array.isArray(filters.value[key])) {
-                // Handle array values (countries)
                 filters.value[key].forEach(value => {
                     params.append(`${key}[]`, value);
                 });
@@ -445,6 +452,41 @@ const getFilterQueryString = () => {
     return queryString ? `&${queryString}` : '';
 };
 
+// Your existing methods remain the same...
+const clearErrors = () => {
+    router.reload();
+};
+
+const formatFieldName = (field) => {
+    const fieldMap = {
+        'client': 'Client',
+        'agency': 'Agency',
+        'budget': 'Budget',
+        'platform': 'Platform',
+        'country': 'Country',
+        'General': 'General Error'
+    };
+    return fieldMap[field] || field;
+};
+
+const formatAgency = (agency) => {
+    if (!agency || agency === 'direct' || agency === 'Unknown Agency') {
+        return 'Direct';
+    }
+    return agency;
+};
+
+const getAgencyBadgeClass = (agency) => {
+    if (!agency || agency === 'direct' || agency === 'Unknown Agency') {
+        return 'bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium';
+    }
+    return 'text-gray-900';
+};
+
+const removeCountry = (countryToRemove) => {
+    filters.value.countries = filters.value.countries.filter(country => country !== countryToRemove);
+};
+
 const form = useForm({
     files: null,
 });
@@ -455,7 +497,7 @@ const clearAllForm = useForm({});
 const filters = ref({
     search: props.filters?.search || '',
     platform: props.filters?.platform || '',
-    countries: props.filters?.countries || (props.filters?.country ? [props.filters.country] : []), // Handle both single and multiple countries
+    countries: props.filters?.countries || (props.filters?.country ? [props.filters.country] : []),
     client: props.filters?.client || '',
     agency: props.filters?.agency || '',
     budget_tier: props.filters?.budget_tier || '',
@@ -463,12 +505,10 @@ const filters = ref({
     max_budget: props.filters?.max_budget || '',
 });
 
-// Watch for filter changes and update URL
+// Watch for filter changes
 watch(filters, (newFilters) => {
-    // Create a clean filters object for the URL
     const urlFilters = { ...newFilters };
     
-    // Remove empty arrays and strings
     Object.keys(urlFilters).forEach(key => {
         if (Array.isArray(urlFilters[key]) && urlFilters[key].length === 0) {
             delete urlFilters[key];
@@ -477,7 +517,10 @@ watch(filters, (newFilters) => {
         }
     });
 
-    // Remove the old single country filter if we're using multiple countries
+    // Add sort parameters to URL filters
+    urlFilters.sort = sortField.value;
+    urlFilters.direction = sortDirection.value;
+
     if (urlFilters.countries && urlFilters.countries.length > 0) {
         delete urlFilters.country;
     }

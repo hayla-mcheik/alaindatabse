@@ -16,7 +16,7 @@ public function index(Request $request)
 {
     $query = AnalyticsRecord::query();
 
-    // Apply filters
+    // Apply filters (your existing filter code remains the same)
     if ($request->has('platform') && $request->platform) {
         $query->where('platform', $request->platform);
     }
@@ -96,8 +96,23 @@ public function index(Request $request)
         $query->where('budget', '<=', $request->max_budget);
     }
 
+    // Apply sorting - NEW CODE
+    $sortField = $request->get('sort', 'budget'); // Default to budget
+    $sortDirection = $request->get('direction', 'desc'); // Default to descending (highest first)
+
+    // Validate sort field to prevent SQL injection
+    $allowedSortFields = ['budget', 'client', 'agency', 'platform', 'country', 'created_at'];
+    if (!in_array($sortField, $allowedSortFields)) {
+        $sortField = 'budget';
+    }
+
+    // Validate direction
+    $sortDirection = in_array(strtolower($sortDirection), ['asc', 'desc']) ? $sortDirection : 'desc';
+
+    $query->orderBy($sortField, $sortDirection);
+
     // Change pagination from 15 to 50 rows per page
-    $records = $query->latest()->paginate(50);
+    $records = $query->paginate(50);
 
     // Get filter options with "Direct" option for agencies
     $platforms = AnalyticsRecord::distinct()->pluck('platform');
@@ -121,13 +136,15 @@ public function index(Request $request)
             'search', 
             'platform', 
             'country', 
-            'countries', // Add countries to filters
+            'countries',
             'client', 
             'agency',
             'budget_tier',
             'min_budget',
             'max_budget'
-        ])
+        ]),
+        'sort' => $sortField,
+        'direction' => $sortDirection
     ]);
 }
 public function import(Request $request)

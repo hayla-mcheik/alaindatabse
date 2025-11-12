@@ -1,7 +1,11 @@
 <script setup>
 import { ref } from 'vue';
 import { getCurrentInstance } from 'vue'; // Used to potentially mock globals
+import { Link, router } from '@inertiajs/vue3'
 
+function logout() {
+  router.post(route('logout'))
+}
 const showingNavigationDropdown = ref(false);
 
 // --- MOCK ENVIRONMENT FOR STANDALONE TESTING ---
@@ -12,12 +16,6 @@ const showingNavigationDropdown = ref(false);
 const mockUser = {
     name: 'Test User',
     email: 'test@example.com',
-};
-
-// Mock function for routing (replaces the global route() function)
-const route = (name) => {
-    // In a real application, this would generate a URL. Here, it just uses a hash for navigation.
-    return `#${name}`;
 };
 
 // Helper to check the "current" route for active styling
@@ -86,9 +84,14 @@ const isRouteActive = (name) => currentRoute.value === name;
                                     <a :href="route('profile.edit')" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                         Profile
                                     </a>
-                                    <a :href="route('logout')" method="post" as="button" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                        Log Out
-                                    </a>
+                         <Link
+    :href="route('logout')"
+    method="post"
+    as="button"
+    class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+  >
+    Log Out
+  </Link>
                                 </div>
                             </div>
 
@@ -178,9 +181,12 @@ const isRouteActive = (name) => currentRoute.value === name;
                         <a :href="route('profile.edit')" class="block w-full ps-3 pe-4 py-2 text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50">
                             Profile
                         </a>
-                        <button :href="route('logout')" class="block w-full text-left ps-3 pe-4 py-2 text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50">
-                            Log Out
-                        </button>
+      <button
+    @click="logout"
+    class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+  >
+    Log Out
+  </button>
                     </div>
                 </div>
             </div>
