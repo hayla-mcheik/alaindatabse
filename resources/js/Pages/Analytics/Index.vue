@@ -351,7 +351,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { ref, watch, onMounted } from 'vue';
 import { useForm, usePage, Link, router } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -389,7 +389,7 @@ const props = defineProps({
     }
 });
 
-// Add sorting state
+// Initialize sorting state from props - this ensures it starts with highest budget
 const sortField = ref(props.sort || 'budget');
 const sortDirection = ref(props.direction || 'desc');
 
@@ -404,7 +404,11 @@ const sortByBudget = () => {
         sortDirection.value = 'desc'; // Default to descending (highest first)
     }
     
-    // Update URL with sort parameters
+    updateURLWithSorting();
+};
+
+// Helper method to update URL with current sorting and filters
+const updateURLWithSorting = () => {
     const urlFilters = { ...filters.value };
     
     // Remove empty arrays and strings
@@ -419,6 +423,11 @@ const sortByBudget = () => {
     // Add sort parameters
     urlFilters.sort = sortField.value;
     urlFilters.direction = sortDirection.value;
+
+    // Remove the old single country filter if we're using multiple countries
+    if (urlFilters.countries && urlFilters.countries.length > 0) {
+        delete urlFilters.country;
+    }
 
     router.get('/analytics', urlFilters, {
         preserveState: true,
@@ -451,6 +460,15 @@ const getFilterQueryString = () => {
     const queryString = params.toString();
     return queryString ? `&${queryString}` : '';
 };
+
+// Ensure initial load has correct sorting
+onMounted(() => {
+    // If no sort parameters are set, ensure we default to budget desc
+    if (!props.sort && !props.direction) {
+        sortField.value = 'budget';
+        sortDirection.value = 'desc';
+    }
+});
 
 // Your existing methods remain the same...
 const clearErrors = () => {
@@ -507,29 +525,7 @@ const filters = ref({
 
 // Watch for filter changes
 watch(filters, (newFilters) => {
-    const urlFilters = { ...newFilters };
-    
-    Object.keys(urlFilters).forEach(key => {
-        if (Array.isArray(urlFilters[key]) && urlFilters[key].length === 0) {
-            delete urlFilters[key];
-        } else if (urlFilters[key] === '' || urlFilters[key] === null || urlFilters[key] === undefined) {
-            delete urlFilters[key];
-        }
-    });
-
-    // Add sort parameters to URL filters
-    urlFilters.sort = sortField.value;
-    urlFilters.direction = sortDirection.value;
-
-    if (urlFilters.countries && urlFilters.countries.length > 0) {
-        delete urlFilters.country;
-    }
-
-    router.get('/analytics', urlFilters, {
-        preserveState: true,
-        replace: true,
-        preserveScroll: true,
-    });
+    updateURLWithSorting();
 }, { deep: true, immediate: false });
 
 const submit = () => {
@@ -620,10 +616,24 @@ const resetFilters = () => {
 
 const formatBudget = (budget) => {
     if (!budget && budget !== 0) return '0.00';
+    
+    // Convert to number first to handle string values
+    const numericBudget = typeof budget === 'string' ? parseFloat(budget) : budget;
+    
     return new Intl.NumberFormat('en-US', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
-    }).format(budget);
+    }).format(numericBudget);
+};
+
+// Add a debug method to check what's being displayed
+const debugRecord = (record) => {
+    console.log('Record:', {
+        client: record.client,
+        budget: record.budget,
+        type: typeof record.budget,
+        formatted: formatBudget(record.budget)
+    });
 };
 
 const getPlatformBadgeClass = (platform) => {

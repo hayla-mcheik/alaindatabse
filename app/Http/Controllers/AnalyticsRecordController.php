@@ -21,13 +21,11 @@ public function index(Request $request)
         $query->where('platform', $request->platform);
     }
 
-    // Update country filter to support multiple countries
     if ($request->has('countries') && $request->countries) {
         $selectedCountries = is_array($request->countries) ? $request->countries : [$request->countries];
         $query->whereIn('country', $selectedCountries);
     }
 
-    // Keep the old single country filter for backward compatibility
     if ($request->has('country') && $request->country && !$request->has('countries')) {
         $query->where('country', 'like', '%' . $request->country . '%');
     }
@@ -59,7 +57,7 @@ public function index(Request $request)
 
     // Budget tier filter
     if ($request->has('budget_tier') && $request->budget_tier) {
-        $budgetStats = AnalyticsRecord::selectRaw('MIN(budget) as min_budget, MAX(budget) as max_budget, AVG(budget) as avg_budget')->first();
+        $budgetStats = AnalyticsRecord::selectRaw('MIN(CAST(budget AS DECIMAL(15,2))) as min_budget, MAX(CAST(budget AS DECIMAL(15,2))) as max_budget, AVG(CAST(budget AS DECIMAL(15,2))) as avg_budget')->first();
         
         $minBudget = $budgetStats->min_budget ?? 0;
         $maxBudget = $budgetStats->max_budget ?? 0;
@@ -67,59 +65,61 @@ public function index(Request $request)
 
         switch ($request->budget_tier) {
             case 'top':
-                $query->where('budget', '>', $avgBudget * 1.5);
+                $query->whereRaw('CAST(budget AS DECIMAL(15,2)) > ?', [$avgBudget * 1.5]);
                 break;
             case 'mid':
-                $query->whereBetween('budget', [$avgBudget * 0.5, $avgBudget * 1.5]);
+                $query->whereBetween(\DB::raw('CAST(budget AS DECIMAL(15,2))'), [$avgBudget * 0.5, $avgBudget * 1.5]);
                 break;
             case 'bottom':
-                $query->where('budget', '<', $avgBudget * 0.5);
+                $query->whereRaw('CAST(budget AS DECIMAL(15,2)) < ?', [$avgBudget * 0.5]);
                 break;
             case 'high':
-                $query->where('budget', '>', 10000);
+                $query->whereRaw('CAST(budget AS DECIMAL(15,2)) > ?', [10000]);
                 break;
             case 'medium':
-                $query->whereBetween('budget', [1000, 10000]);
+                $query->whereBetween(\DB::raw('CAST(budget AS DECIMAL(15,2))'), [1000, 10000]);
                 break;
             case 'low':
-                $query->where('budget', '<', 1000);
+                $query->whereRaw('CAST(budget AS DECIMAL(15,2)) < ?', [1000]);
                 break;
         }
     }
 
-    // Budget range filter (keep existing)
+    // Budget range filter
     if ($request->has('min_budget') && $request->min_budget) {
-        $query->where('budget', '>=', $request->min_budget);
+        $query->whereRaw('CAST(budget AS DECIMAL(15,2)) >= ?', [$request->min_budget]);
     }
 
     if ($request->has('max_budget') && $request->max_budget) {
-        $query->where('budget', '<=', $request->max_budget);
+        $query->whereRaw('CAST(budget AS DECIMAL(15,2)) <= ?', [$request->max_budget]);
     }
 
-    // Apply sorting - NEW CODE
-    $sortField = $request->get('sort', 'budget'); // Default to budget
-    $sortDirection = $request->get('direction', 'desc'); // Default to descending (highest first)
+    // Apply sorting - FIXED: Cast budget to decimal for proper numeric sorting
+    $sortField = $request->get('sort', 'budget');
+    $sortDirection = $request->get('direction', 'desc');
 
-    // Validate sort field to prevent SQL injection
     $allowedSortFields = ['budget', 'client', 'agency', 'platform', 'country', 'created_at'];
     if (!in_array($sortField, $allowedSortFields)) {
         $sortField = 'budget';
     }
 
-    // Validate direction
     $sortDirection = in_array(strtolower($sortDirection), ['asc', 'desc']) ? $sortDirection : 'desc';
 
-    $query->orderBy($sortField, $sortDirection);
+    // If sorting by budget, cast to decimal for proper numeric sorting
+    if ($sortField === 'budget') {
+        $query->orderByRaw('CAST(budget AS DECIMAL(15,2)) ' . $sortDirection);
+    } else {
+        $query->orderBy($sortField, $sortDirection);
+    }
 
     // Change pagination from 15 to 50 rows per page
     $records = $query->paginate(50);
 
-    // Get filter options with "Direct" option for agencies
+    // Get filter options
     $platforms = AnalyticsRecord::distinct()->pluck('platform');
     $countries = AnalyticsRecord::distinct()->pluck('country');
     $clients = AnalyticsRecord::distinct()->pluck('client');
     
-    // Get agencies and add "Direct" option for null/empty agencies
     $agencies = AnalyticsRecord::whereNotNull('agency')
         ->where('agency', '!=', '')
         ->where('agency', '!=', 'Unknown Agency')
