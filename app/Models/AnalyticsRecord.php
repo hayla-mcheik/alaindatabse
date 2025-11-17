@@ -14,10 +14,12 @@ class AnalyticsRecord extends Model
         'budget',
         'platform',
         'country',
+        'date',
         'source_file' // Add this
     ];
 
     protected $casts = [
-        'budget' => 'decimal:2'
+        'budget' => 'decimal:2',
+           'date' => 'date' 
     ];
 }

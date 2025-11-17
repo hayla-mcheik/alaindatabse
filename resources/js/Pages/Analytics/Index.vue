@@ -74,6 +74,15 @@
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-3xl font-bold text-gray-800">Analytics Records</h1>
                 <div class="space-x-4">
+                    <button 
+                        @click="clearAll"
+                        :disabled="clearAllForm.processing"
+                        class="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
+                    >
+                        <span v-if="clearAllForm.processing">Clearing...</span>
+                        <span v-else>Clear All Data</span>
+                    </button>
+                    
                     <Link 
                         href="/analytics/stats"
                         class="inline-flex items-center px-4 py-2 bg-green-600 text-black rounded-md hover:bg-green-700"
@@ -83,55 +92,51 @@
                 </div>
             </div>
 
-      
-
             <!-- File Upload Section -->
-<div class="bg-white rounded-lg shadow-md p-6 mb-6">
-    <h2 class="text-xl font-semibold mb-4">Import & Export Excel Files</h2>
-    <form @submit.prevent="submit" class="space-y-4">
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-                Select Excel Files (Multiple files supported)
-            </label>
-            <input 
-                type="file" 
-                @input="form.files = $event.target.files"
-                multiple
-                accept=".xlsx,.xls,.csv"
-                class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-            />
-            <p class="text-sm text-gray-500 mt-1">
-                Supported platforms: Google, Snap, TikTok, Meta, Twitter
-            </p>
-            <div v-if="form.errors.files" class="text-red-600 text-sm mt-1">
-                {{ form.errors.files }}
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">Import & Export Excel Files</h2>
+                <form @submit.prevent="submit" enctype="multipart/form-data" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Select Excel Files (Multiple files supported)
+                        </label>
+                        <input 
+                            type="file" 
+                            @input="form.files = $event.target.files"
+                            multiple
+                            accept=".xlsx,.xls,.csv"
+                            class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        />
+                        <p class="text-sm text-gray-500 mt-1">
+                            Supported platforms: Google, Snap, TikTok, Meta, Twitter
+                        </p>
+                        <div v-if="form.errors.files" class="text-red-600 text-sm mt-1">
+                            {{ form.errors.files }}
+                        </div>
+                    </div>
+
+                    <div class="flex space-x-4">
+                        <button 
+                            type="submit" 
+                            :disabled="form.processing || !form.files || form.files.length === 0"
+                            class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
+                        >
+                            <span v-if="form.processing">Importing...</span>
+                            <span v-else>Import Files</span>
+                        </button>
+
+                        <button 
+                            type="button"
+                            @click="exportData"
+                            :disabled="exportForm.processing"
+                            class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:bg-green-700 active:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
+                        >
+                            <span v-if="exportForm.processing">Exporting...</span>
+                            <span v-else>Export Data</span>
+                        </button>
+                    </div>
+                </form>
             </div>
-        </div>
-
-        <div class="flex space-x-4">
-            <button 
-                type="submit" 
-                :disabled="form.processing"
-                class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
-            >
-                <span v-if="form.processing">Importing...</span>
-                <span v-else>Import Files</span>
-            </button>
-
-            <button 
-                type="button"
-                @click="exportData"
-                :disabled="exportForm.processing"
-                class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:bg-green-700 active:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
-            >
-                <span v-if="exportForm.processing">Exporting...</span>
-                <span v-else>Export Data</span>
-            </button>
-
-
-        </div>
-    </form>
-</div>
 
             <!-- Updated Filters Section -->
             <div class="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -161,37 +166,36 @@
                         </select>
                     </div>
 
-       <div>
-            <label class="block text-sm font-medium text-gray-700">Country</label>
-            <select 
-                v-model="filters.countries"
-                multiple    
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-32"
-            >
-                <!-- <option value="">All Countries</option> -->
-                <option v-for="country in countries" :key="country" :value="country">
-                    {{ country }}
-                </option>
-            </select>
-            <p class="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple countries</p>
-            <div v-if="filters.countries && filters.countries.length > 0" class="mt-2">
-                <div class="flex flex-wrap gap-1">
-                    <span 
-                        v-for="(selectedCountry, index) in filters.countries" 
-                        :key="index"
-                        class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                    >
-                        {{ selectedCountry }}
-                        <button 
-                            @click="removeCountry(selectedCountry)"
-                            class="ml-1 text-blue-600 hover:text-blue-800"
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Country</label>
+                        <select 
+                            v-model="filters.countries"
+                            multiple    
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-32"
                         >
-                            ×
-                        </button>
-                    </span>
-                </div>
-            </div>
-        </div>
+                            <option v-for="country in countries" :key="country" :value="country">
+                                {{ country }}
+                            </option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple countries</p>
+                        <div v-if="filters.countries && filters.countries.length > 0" class="mt-2">
+                            <div class="flex flex-wrap gap-1">
+                                <span 
+                                    v-for="(selectedCountry, index) in filters.countries" 
+                                    :key="index"
+                                    class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                                >
+                                    {{ selectedCountry }}
+                                    <button 
+                                        @click="removeCountry(selectedCountry)"
+                                        class="ml-1 text-blue-600 hover:text-blue-800"
+                                    >
+                                        ×
+                                    </button>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Client</label>
@@ -238,6 +242,10 @@
                         </select>
                     </div>
 
+        
+
+                    <!-- Empty column to maintain layout -->
+                    <div></div>
                 </div>
                 
                 <!-- Reset Button -->
@@ -251,7 +259,7 @@
                 </div>
             </div>
 
-               <!-- Records Table -->
+            <!-- Records Table -->
             <div class="bg-white rounded-lg shadow-md overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -278,6 +286,15 @@
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Country
                                 </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                                    @click="sortByDate">
+                                    <div class="flex items-center">
+                                        Year
+                                        <span v-if="sortField === 'date'" class="ml-1">
+                                            {{ sortDirection === 'desc' ? '↓' : '↑' }}
+                                        </span>
+                                    </div>
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
@@ -301,9 +318,12 @@
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ record.country }}
                                 </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                                    {{ formatYear(record.date) }}
+                                </td>
                             </tr>
                             <tr v-if="!records?.data || records.data.length === 0">
-                                <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">
+                                <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">
                                     No records found. Import some Excel files to get started.
                                 </td>
                             </tr>
@@ -351,7 +371,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head } from '@inertiajs/vue3';
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, computed } from 'vue';
 import { useForm, usePage, Link, router } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -389,25 +409,91 @@ const props = defineProps({
     }
 });
 
-// Initialize sorting state from props - this ensures it starts with highest budget
+// Initialize sorting state from props
 const sortField = ref(props.sort || 'budget');
 const sortDirection = ref(props.direction || 'desc');
 
-// Add method to sort by budget
-const sortByBudget = () => {
-    if (sortField.value === 'budget') {
-        // Toggle direction if already sorting by budget
+// Forms
+const form = useForm({
+    files: null,
+});
+
+const exportForm = useForm({});
+const clearAllForm = useForm({});
+
+// Available years (you can generate this dynamically from your data)
+const availableYears = ref([2023, 2024, 2025, 2026]);
+
+// Filters
+const filters = ref({
+    search: props.filters?.search || '',
+    platform: props.filters?.platform || '',
+    countries: props.filters?.countries || (props.filters?.country ? [props.filters.country] : []),
+    client: props.filters?.client || '',
+    agency: props.filters?.agency || '',
+    budget_tier: props.filters?.budget_tier || '',
+    min_budget: props.filters?.min_budget || '',
+    max_budget: props.filters?.max_budget || '',
+    year: props.filters?.year || '',
+});
+
+// Watch for filter changes
+watch(filters, (newFilters) => {
+    updateURLWithSorting();
+}, { deep: true, immediate: false });
+
+// Clear All Data Method
+const clearAll = () => {
+    if (confirm('Are you sure you want to delete ALL records? This action cannot be undone.')) {
+        clearAllForm.get('/analytics/clear-all', {
+            preserveScroll: true,
+            onSuccess: () => {
+                console.log('All data cleared successfully');
+                router.reload();
+            },
+            onError: (errors) => {
+                console.error('Error clearing data:', errors);
+                alert('Error clearing data. Please try again.');
+            },
+        });
+    }
+};
+
+// Year formatting - only show the year
+const formatYear = (dateString) => {
+    if (!dateString) return 'N/A';
+    
+    try {
+        const date = new Date(dateString);
+        return date.getFullYear().toString();
+    } catch (error) {
+        return 'N/A';
+    }
+};
+
+// Sort by date (year)
+const sortByDate = () => {
+    if (sortField.value === 'date') {
         sortDirection.value = sortDirection.value === 'desc' ? 'asc' : 'desc';
     } else {
-        // Switch to budget sorting
-        sortField.value = 'budget';
-        sortDirection.value = 'desc'; // Default to descending (highest first)
+        sortField.value = 'date';
+        sortDirection.value = 'desc';
     }
-    
     updateURLWithSorting();
 };
 
-// Helper method to update URL with current sorting and filters
+// Sort by budget
+const sortByBudget = () => {
+    if (sortField.value === 'budget') {
+        sortDirection.value = sortDirection.value === 'desc' ? 'asc' : 'desc';
+    } else {
+        sortField.value = 'budget';
+        sortDirection.value = 'desc';
+    }
+    updateURLWithSorting();
+};
+
+// Update URL with sorting and filters
 const updateURLWithSorting = () => {
     const urlFilters = { ...filters.value };
     
@@ -436,12 +522,12 @@ const updateURLWithSorting = () => {
     });
 };
 
-// Update getSortQueryString method
+// Get sort query string
 const getSortQueryString = () => {
     return `&sort=${sortField.value}&direction=${sortDirection.value}`;
 };
 
-// Update getFilterQueryString to include sort
+// Get filter query string
 const getFilterQueryString = () => {
     const params = new URLSearchParams();
     
@@ -461,16 +547,22 @@ const getFilterQueryString = () => {
     return queryString ? `&${queryString}` : '';
 };
 
-// Ensure initial load has correct sorting
-onMounted(() => {
-    // If no sort parameters are set, ensure we default to budget desc
-    if (!props.sort && !props.direction) {
-        sortField.value = 'budget';
-        sortDirection.value = 'desc';
-    }
-});
+// Reset filters
+const resetFilters = () => {
+    filters.value = {
+        search: '',
+        platform: '',
+        countries: [],
+        client: '',
+        agency: '',
+        budget_tier: '',
+        min_budget: '',
+        max_budget: '',
+        year: '',
+    };
+};
 
-// Your existing methods remain the same...
+// Other methods
 const clearErrors = () => {
     router.reload();
 };
@@ -482,6 +574,7 @@ const formatFieldName = (field) => {
         'budget': 'Budget',
         'platform': 'Platform',
         'country': 'Country',
+        'date': 'Year',
         'General': 'General Error'
     };
     return fieldMap[field] || field;
@@ -505,29 +598,6 @@ const removeCountry = (countryToRemove) => {
     filters.value.countries = filters.value.countries.filter(country => country !== countryToRemove);
 };
 
-const form = useForm({
-    files: null,
-});
-
-const exportForm = useForm({});
-const clearAllForm = useForm({});
-
-const filters = ref({
-    search: props.filters?.search || '',
-    platform: props.filters?.platform || '',
-    countries: props.filters?.countries || (props.filters?.country ? [props.filters.country] : []),
-    client: props.filters?.client || '',
-    agency: props.filters?.agency || '',
-    budget_tier: props.filters?.budget_tier || '',
-    min_budget: props.filters?.min_budget || '',
-    max_budget: props.filters?.max_budget || '',
-});
-
-// Watch for filter changes
-watch(filters, (newFilters) => {
-    updateURLWithSorting();
-}, { deep: true, immediate: false });
-
 const submit = () => {
     if (!form.files || form.files.length === 0) {
         alert('Please select at least one file');
@@ -547,13 +617,11 @@ const submit = () => {
 };
 
 const exportData = () => {
-    // Build export URL with current filters
     const params = new URLSearchParams();
     
     Object.keys(filters.value).forEach(key => {
         if (filters.value[key]) {
             if (Array.isArray(filters.value[key])) {
-                // Handle array values (countries)
                 filters.value[key].forEach(value => {
                     params.append(`${key}[]`, value);
                 });
@@ -565,7 +633,6 @@ const exportData = () => {
 
     const url = `/analytics/export?${params.toString()}`;
     
-    // Create a temporary link to trigger download
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', 'true');
@@ -574,66 +641,15 @@ const exportData = () => {
     document.body.removeChild(link);
 };
 
-const deleteRecord = (record) => {
-    if (confirm('Are you sure you want to delete this record?')) {
-        router.delete(`/analytics/${record.id}`, {
-            preserveScroll: true,
-            onSuccess: () => {
-                // Optional: Show success message or refresh data
-            }
-        });
-    }
-};
-
-const clearAll = () => {
-    if (confirm('Are you sure you want to delete ALL records? This action cannot be undone.')) {
-        clearAllForm.post('/analytics/clear-all', {
-            preserveScroll: true,
-            onSuccess: () => {
-                console.log('All data cleared successfully');
-                window.location.reload();
-            },
-            onError: (errors) => {
-                console.error('Error clearing data:', errors);
-                alert('Error clearing data. Please try again.');
-            },
-        });
-    }
-};
-
-const resetFilters = () => {
-    filters.value = {
-        search: '',
-        platform: '',
-        countries: [], // Reset to empty array
-        client: '',
-        agency: '',
-        budget_tier: '',
-        min_budget: '',
-        max_budget: '',
-    };
-};
-
 const formatBudget = (budget) => {
     if (!budget && budget !== 0) return '0.00';
     
-    // Convert to number first to handle string values
     const numericBudget = typeof budget === 'string' ? parseFloat(budget) : budget;
     
     return new Intl.NumberFormat('en-US', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     }).format(numericBudget);
-};
-
-// Add a debug method to check what's being displayed
-const debugRecord = (record) => {
-    console.log('Record:', {
-        client: record.client,
-        budget: record.budget,
-        type: typeof record.budget,
-        formatted: formatBudget(record.budget)
-    });
 };
 
 const getPlatformBadgeClass = (platform) => {
@@ -648,4 +664,12 @@ const getPlatformBadgeClass = (platform) => {
     };
     return classes[platform] || 'bg-gray-100 text-gray-800';
 };
+
+// Ensure initial load has correct sorting
+onMounted(() => {
+    if (!props.sort && !props.direction) {
+        sortField.value = 'budget';
+        sortDirection.value = 'desc';
+    }
+});
 </script>
