@@ -9,6 +9,7 @@ use Maatwebsite\Excel\Concerns\WithValidation;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use Maatwebsite\Excel\Concerns\SkipsOnFailure;
 use Maatwebsite\Excel\Concerns\SkipsFailures;
+use Maatwebsite\Excel\Validators\Failure;
 use Carbon\Carbon;
 
 class AnalyticsRecordImport implements ToModel, WithHeadingRow, WithValidation, SkipsEmptyRows, SkipsOnFailure
@@ -18,20 +19,49 @@ class AnalyticsRecordImport implements ToModel, WithHeadingRow, WithValidation, 
     private $sourceFile;
     private $successfulRows = 0;
     private $isExportFile = false;
+    private $existingRecords = [];
+    private $skippedRows = []; // Track skipped rows with reasons
+    private $currentRowIndex = 0; // Track current row index for better error reporting
 
     public function __construct($sourceFile)
     {
         $this->sourceFile = $sourceFile;
         $this->isExportFile = $this->isExportFileFormat($sourceFile);
+        
+        // Pre-load existing records for this source file to check for updates
+        $this->loadExistingRecords();
+    }
+
+    private function loadExistingRecords()
+    {
+        // Load existing records for this source file to check for updates
+        $this->existingRecords = AnalyticsRecord::where('source_file', $this->sourceFile)
+            ->get()
+            ->keyBy(function ($record) {
+                return $this->generateRecordKey($record);
+            });
+    }
+
+    private function generateRecordKey($data)
+    {
+        // Create a unique key based on client, platform, country, and year
+        $client = $data['client'] ?? '';
+        $platform = $data['platform'] ?? '';
+        $country = $data['country'] ?? '';
+        $year = isset($data['date']) ? Carbon::parse($data['date'])->format('Y') : '';
+        
+        return md5("{$client}_{$platform}_{$country}_{$year}");
     }
 
     public function model(array $row)
     {
-        \Log::info('Processing row:', $row);
+        $this->currentRowIndex++;
+        \Log::info("Processing row {$this->currentRowIndex}:", $row);
 
         // Skip empty rows
         if ($this->isEmptyRow($row)) {
             \Log::info('Skipping empty row');
+            $this->trackSkippedRow($row, 'Empty row');
             return null;
         }
 
@@ -50,6 +80,7 @@ class AnalyticsRecordImport implements ToModel, WithHeadingRow, WithValidation, 
             // Skip if essential data is missing
             if (empty($data['client']) || $data['client'] === 'Unknown Client') {
                 \Log::warning('Skipping row: Missing client data');
+                $this->trackSkippedRow($row, 'Missing or invalid client data');
                 return null;
             }
 
@@ -65,29 +96,107 @@ class AnalyticsRecordImport implements ToModel, WithHeadingRow, WithValidation, 
 
             if ($data['budget'] <= 0) {
                 \Log::warning('Skipping row: Invalid budget', ['budget' => $data['budget']]);
+                $this->trackSkippedRow($row, 'Invalid budget (zero or negative)');
                 return null;
             }
 
-            $this->successfulRows++;
+            // Check if date is valid
+            if (empty($data['date'])) {
+                \Log::warning('Skipping row: Invalid or missing date');
+                $this->trackSkippedRow($row, 'Invalid or missing date');
+                return null;
+            }
 
-            $record = new AnalyticsRecord([
-                'client' => $data['client'],
-                'agency' => $data['agency'],
-                'budget' => $data['budget'],
-                'platform' => $data['platform'],
-                'country' => $data['country'],
-                'date' => $data['date'],
-                'source_file' => $this->sourceFile,
-            ]);
+            // Check if record already exists for this source file
+            $recordKey = $this->generateRecordKey($data);
+            
+            if (isset($this->existingRecords[$recordKey])) {
+                // Update existing record
+                $existingRecord = $this->existingRecords[$recordKey];
+                \Log::info('Updating existing record', [
+                    'existing_id' => $existingRecord->id,
+                    'old_budget' => $existingRecord->budget,
+                    'new_budget' => $data['budget'],
+                    'client' => $data['client']
+                ]);
 
-            \Log::info('Created record:', $record->toArray());
-            return $record;
+                // Update the record
+                $existingRecord->update([
+                    'agency' => $data['agency'],
+                    'budget' => $data['budget'],
+                    'source_file' => $this->sourceFile,
+                    'updated_at' => now(),
+                ]);
+
+                $this->successfulRows++;
+                return null; // Return null since we're updating, not creating
+            } else {
+                // Create new record
+                $this->successfulRows++;
+
+                $record = new AnalyticsRecord([
+                    'client' => $data['client'],
+                    'agency' => $data['agency'],
+                    'budget' => $data['budget'],
+                    'platform' => $data['platform'],
+                    'country' => $data['country'],
+                    'date' => $data['date'],
+                    'source_file' => $this->sourceFile,
+                ]);
+
+                \Log::info('Creating new record:', $record->toArray());
+                return $record;
+            }
 
         } catch (\Exception $e) {
-            \Log::error('Error creating record: ' . $e->getMessage());
+            \Log::error('Error processing record: ' . $e->getMessage());
             \Log::error('Row data that caused error:', $row);
+            $this->trackSkippedRow($row, 'Processing error: ' . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Track skipped rows with reasons
+     */
+    private function trackSkippedRow(array $row, string $reason)
+    {
+        $this->skippedRows[] = [
+            'row_data' => $row,
+            'reason' => $reason,
+            'file' => $this->sourceFile,
+            'row_index' => $this->currentRowIndex + 1 // +1 because heading row is row 1
+        ];
+    }
+
+    /**
+     * Get all skipped rows with reasons
+     */
+    public function getSkippedRows(): array
+    {
+        return $this->skippedRows;
+    }
+
+    /**
+     * Get count of skipped rows
+     */
+    public function getSkippedRowsCount(): int
+    {
+        return count($this->skippedRows);
+    }
+
+    /**
+     * Get comprehensive import statistics
+     */
+    public function getImportStats(): array
+    {
+        return [
+            'successful_rows' => $this->successfulRows,
+            'skipped_rows' => $this->skippedRows,
+            'skipped_count' => $this->getSkippedRowsCount(),
+            'failures' => $this->failures(),
+            'failure_count' => count($this->failures()),
+        ];
     }
 
     private function isExportFileFormat($filename)
@@ -109,14 +218,14 @@ class AnalyticsRecordImport implements ToModel, WithHeadingRow, WithValidation, 
 
     private function extractFromExportFile(array $row)
     {
-        // For export files (your system's export format)
+        // For export files (your system's export structure)
         return [
             'client' => $this->getValue($row, ['client', 'client_name'], 'Unknown Client'),
             'agency' => $this->normalizeAgency($this->getValue($row, ['agency', 'agency_name'], 'direct')),
             'budget' => $this->normalizeBudget($this->getValue($row, ['budget', 'budget_amount'], 0)),
             'platform' => $this->normalizePlatform($this->getValue($row, ['platform', 'platform_name'], $this->determinePlatformFromFilename($this->sourceFile))),
             'country' => $this->getValue($row, ['country', 'country_name'], 'Unknown'),
-            'date' => $this->extractDate($row), // Fixed: Use extractDate method
+            'date' => $this->extractDate($row),
         ];
     }
 
@@ -131,11 +240,10 @@ class AnalyticsRecordImport implements ToModel, WithHeadingRow, WithValidation, 
             'budget' => $this->extractBudget($row),
             'platform' => $this->extractPlatform($row) ?: $platformFromFile,
             'country' => $this->extractCountry($row),
-            'date' => $this->extractDate($row), // Fixed: Use extractDate method instead of extractCountry
+            'date' => $this->extractDate($row),
         ];
     }
 
-    // Add this method to extract date
     private function extractDate(array $row)
     {
         $possibleKeys = [
@@ -147,7 +255,6 @@ class AnalyticsRecordImport implements ToModel, WithHeadingRow, WithValidation, 
         return $this->normalizeDate($dateValue);
     }
 
-    // Add this method to normalize date
     private function normalizeDate($dateValue)
     {
         if (is_null($dateValue) || $dateValue === '' || $dateValue === 'NULL') {
@@ -350,7 +457,6 @@ class AnalyticsRecordImport implements ToModel, WithHeadingRow, WithValidation, 
         }
 
         return floatval($budget);
-        // Don't convert negative to 0 here - handle it in the model method
     }
 
     private function normalizePlatform($platform)
@@ -390,10 +496,10 @@ class AnalyticsRecordImport implements ToModel, WithHeadingRow, WithValidation, 
             // Make all fields nullable and remove strict validation
             '*.client' => 'nullable|string|max:255',
             '*.agency' => 'nullable|string|max:255', 
-            '*.budget' => 'nullable|numeric', // Removed min:0 to allow negative values temporarily
+            '*.budget' => 'nullable|numeric',
             '*.platform' => 'nullable|string|max:50',
             '*.country' => 'nullable|string|max:100',
-            '*.date' => 'nullable', // Make date validation more flexible
+            '*.date' => 'nullable',
         ];
     }
 
@@ -415,5 +521,13 @@ class AnalyticsRecordImport implements ToModel, WithHeadingRow, WithValidation, 
     public function getRowCount(): int
     {
         return $this->successfulRows;
+    }
+
+    /**
+     * Get total processed rows (successful + skipped)
+     */
+    public function getTotalProcessedRows(): int
+    {
+        return $this->successfulRows + $this->getSkippedRowsCount();
     }
 }

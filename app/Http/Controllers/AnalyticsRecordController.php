@@ -160,114 +160,188 @@ class AnalyticsRecordController extends Controller
         ]);
     }
 
-    public function import(Request $request)
-    {
-        // FIX: Check if files exist and get count safely
-        $files = $request->file('files');
-        $filesCount = is_array($files) ? count($files) : 0;
-        \Log::info('Import request received', ['files_count' => $filesCount]);
+public function import(Request $request)
+{
+    // FIX: Check if files exist and get count safely
+    $files = $request->file('files');
+    $filesCount = is_array($files) ? count($files) : 0;
+    \Log::info('Import request received', ['files_count' => $filesCount]);
 
-        $request->validate([
-            'files.*' => 'required|file|mimes:xlsx,xls,csv|max:10240'
-        ]);
+    $request->validate([
+        'files.*' => 'required|file|mimes:xlsx,xls,csv|max:10240'
+    ]);
 
-        // Add additional validation to ensure files exist
-        if (!$files || $filesCount === 0) {
-            return redirect()->back()->with('error', 'No files selected for import.');
-        }
+    // Add additional validation to ensure files exist
+    if (!$files || $filesCount === 0) {
+        return redirect()->back()->with('error', 'No files selected for import.');
+    }
 
-        $importedFiles = [];
-        $importedCount = 0;
-        $errors = [];
+    $importedFiles = [];
+    $importedCount = 0;
+    $updatedCount = 0;
+    $errors = [];
+    $totalRowsProcessed = 0;
+    $failedRowsCount = 0;
+    $skippedRows = [];
 
-        foreach ($files as $file) {
-            try {
-                $filename = $file->getClientOriginalName();
-                \Log::info("Importing file: {$filename}");
-                
-                $import = new AnalyticsRecordImport($filename);
-                Excel::import($import, $file);
-                $importedFiles[] = $filename;
-                $rowCount = $import->getRowCount();
+    foreach ($files as $file) {
+        try {
+            $filename = $file->getClientOriginalName();
+            \Log::info("Importing file: {$filename}");
+            
+            // Check if file already exists in database
+            $existingFileRecords = AnalyticsRecord::where('source_file', $filename)->count();
+            $isUpdate = $existingFileRecords > 0;
+            
+            $import = new AnalyticsRecordImport($filename);
+            Excel::import($import, $file);
+            $importedFiles[] = $filename;
+            $rowCount = $import->getRowCount();
+            $totalRowsProcessed += $rowCount;
+            
+            // Get skipped rows from the import
+            $fileSkippedRows = $import->getSkippedRows();
+            $skippedRowsCount = $import->getSkippedRowsCount();
+            $failedRowsCount += $skippedRowsCount;
+            
+            if (!empty($fileSkippedRows)) {
+                $skippedRows = array_merge($skippedRows, $fileSkippedRows);
+            }
+            
+            if ($isUpdate) {
+                $updatedCount += $rowCount;
+                \Log::info("File {$filename} updated successfully. Updated rows: {$rowCount}");
+            } else {
                 $importedCount += $rowCount;
+                \Log::info("File {$filename} imported successfully. New rows: {$rowCount}");
+            }
 
-                \Log::info("File {$filename} imported successfully. Rows: {$rowCount}");
-
-                // Get any failures that occurred during import
-                $failures = $import->failures();
-                if (!empty($failures)) {
-                    $failureCount = is_array($failures) ? count($failures) : $failures->count();
-                    
-                    if ($failureCount > 0) {
-                        foreach ($failures as $failure) {
-                            $errors[] = [
-                                'file' => $filename,
-                                'row' => $failure->row(),
-                                'attribute' => $failure->attribute(),
-                                'errors' => $failure->errors(),
-                                'values' => $failure->values()
-                            ];
-                        }
-                        \Log::warning("Import had failures for {$filename}", ['failures' => $failureCount]);
-                        \Log::warning("First failure details:", (array) $failures[0]);
+            // Get any failures that occurred during import
+            $failures = $import->failures();
+            if (!empty($failures)) {
+                $failureCount = is_array($failures) ? count($failures) : $failures->count();
+                $failedRowsCount += $failureCount;
+                
+                if ($failureCount > 0) {
+                    foreach ($failures as $failure) {
+                        $errors[] = [
+                            'file' => $filename,
+                            'row' => $failure->row(),
+                            'attribute' => $failure->attribute(),
+                            'errors' => $failure->errors(),
+                            'values' => $failure->values(),
+                            'type' => 'validation_error'
+                        ];
                     }
+                    \Log::warning("Import had failures for {$filename}", ['failures' => $failureCount]);
                 }
+            }
 
-            } catch (ValidationException $e) {
-                \Log::error("Validation exception for {$filename}: " . $e->getMessage());
-                $failures = $e->failures();
-                
-                foreach ($failures as $failure) {
-                    $errors[] = [
-                        'file' => $filename,
-                        'row' => $failure->row(),
-                        'attribute' => $failure->attribute(),
-                        'errors' => $failure->errors(),
-                        'values' => $failure->values()
-                    ];
-                    \Log::error("Validation failure - Row: {$failure->row()}, Attribute: {$failure->attribute()}, Errors: " . implode(', ', $failure->errors()));
-                }
-                
-                \Log::error("Validation error importing {$filename}", ['failures' => count($failures)]);
-                
-            } catch (\Exception $e) {
-                \Log::error('Import error for file ' . $filename . ': ' . $e->getMessage());
-                \Log::error('Stack trace: ' . $e->getTraceAsString());
+        } catch (ValidationException $e) {
+            \Log::error("Validation exception for {$filename}: " . $e->getMessage());
+            $failures = $e->failures();
+            $failureCount = is_array($failures) ? count($failures) : $failures->count();
+            $failedRowsCount += $failureCount;
+            
+            foreach ($failures as $failure) {
                 $errors[] = [
                     'file' => $filename,
-                    'row' => 'N/A',
-                    'attribute' => 'General',
-                    'errors' => [$e->getMessage()],
-                    'values' => []
+                    'row' => $failure->row(),
+                    'attribute' => $failure->attribute(),
+                    'errors' => $failure->errors(),
+                    'values' => $failure->values(),
+                    'type' => 'validation_exception'
                 ];
+                \Log::error("Validation failure - Row: {$failure->row()}, Attribute: {$failure->attribute()}, Errors: " . implode(', ', $failure->errors()));
             }
-        }
-
-        // Prepare response message
-        if ($importedCount > 0) {
-            $message = "Successfully imported {$importedCount} records from: " . implode(', ', $importedFiles);
-        } else {
-            $message = "No records were imported.";
-        }
-
-        // Add errors to session if any
-        if (!empty($errors)) {
-            $errorCount = count($errors);
-            $message .= " Found {$errorCount} error(s).";
             
-            // Store errors in session for display
-            session()->flash('import_errors', $errors);
-        }
-
-        \Log::info('Import completed: ' . $message);
-        
-        if ($importedCount > 0) {
-            return redirect()->back()->with('success', $message);
-        } else {
-            return redirect()->back()->with('error', $message);
+        } catch (\Exception $e) {
+            \Log::error('Import error for file ' . $filename . ': ' . $e->getMessage());
+            $failedRowsCount++;
+            $errors[] = [
+                'file' => $filename,
+                'row' => 'N/A',
+                'attribute' => 'General',
+                'errors' => [$e->getMessage()],
+                'values' => [],
+                'type' => 'general_exception'
+            ];
         }
     }
 
+    // Convert skipped rows to error format for display
+    foreach ($skippedRows as $skippedRow) {
+        $errors[] = [
+            'file' => $skippedRow['file'],
+            'row' => 'N/A', // We don't have exact row number for skipped rows
+            'attribute' => 'Skipped Record',
+            'errors' => [$skippedRow['reason']],
+            'values' => $skippedRow['row_data'],
+            'type' => 'skipped_row'
+        ];
+    }
+
+    // Prepare comprehensive response message
+    $message = '';
+    
+    if ($importedCount > 0) {
+        $message .= "✅ Successfully imported {$importedCount} new records. ";
+    }
+    
+    if ($updatedCount > 0) {
+        $message .= "🔄 Updated {$updatedCount} existing records. ";
+    }
+    
+    if ($failedRowsCount > 0) {
+        $message .= "❌ {$failedRowsCount} records failed to import or were skipped. ";
+    }
+    
+    if ($totalRowsProcessed === 0 && $failedRowsCount === 0) {
+        $message = "⚠️ No records were imported or updated. ";
+    }
+    
+    $message .= "📁 Files processed: " . implode(', ', $importedFiles);
+
+    // Add detailed statistics
+    $stats = [
+        'imported' => $importedCount,
+        'updated' => $updatedCount,
+        'failed' => $failedRowsCount,
+        'total_processed' => $totalRowsProcessed,
+        'files_count' => count($importedFiles),
+        'skipped_rows' => count($skippedRows)
+    ];
+
+    \Log::info('Import statistics:', $stats);
+    \Log::info('Skipped rows details:', ['skipped_count' => count($skippedRows), 'skipped_rows' => $skippedRows]);
+
+    // Store errors and statistics in session
+    if (!empty($errors)) {
+        $errorCount = count($errors);
+        $message .= " Found {$errorCount} error(s) during import.";
+        
+        session()->flash('import_errors', $errors);
+        session()->flash('import_stats', $stats);
+        \Log::info("Import completed with {$errorCount} errors", ['errors' => $errors]);
+    } else {
+        session()->flash('import_stats', $stats);
+        \Log::info('Import completed successfully: ' . $message);
+    }
+
+    // Return appropriate response
+    if ($failedRowsCount > 0 || !empty($errors)) {
+        return redirect()->back()
+            ->with('success', $message)
+            ->with('import_errors', $errors ?? [])
+            ->with('import_stats', $stats);
+    } elseif ($totalRowsProcessed > 0) {
+        return redirect()->back()
+            ->with('success', $message)
+            ->with('import_stats', $stats);
+    } else {
+        return redirect()->back()->with('error', $message);
+    }
+}
     public function destroy(AnalyticsRecord $record)
     {
         $record->delete();

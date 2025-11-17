@@ -4,72 +4,205 @@
     <AuthenticatedLayout>
         <div class="container mx-auto p-6">
             <!-- Flash Messages -->
-            <div v-if="$page.props.flash && $page.props.flash.success" class="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+            <div v-if="$page.props.flash.success" class="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
+                <button 
+                    @click="clearFlash('success')"
+                    class="absolute top-2 right-2 text-green-600 hover:text-green-800"
+                >
+                    ×
+                </button>
                 {{ $page.props.flash.success }}
             </div>
 
-            <div v-if="$page.props.flash && $page.props.flash.error" class="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <div v-if="$page.props.flash.error" class="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+                <button 
+                    @click="clearFlash('error')"
+                    class="absolute top-2 right-2 text-red-600 hover:text-red-800"
+                >
+                    ×
+                </button>
                 {{ $page.props.flash.error }}
             </div>
 
-            <!-- Import Errors Section -->
-            <div v-if="$page.props.flash && $page.props.flash.import_errors && $page.props.flash.import_errors.length > 0" class="mb-6">
-                <div class="bg-red-50 border border-red-200 rounded-md p-4">
-                    <div class="flex justify-between items-center mb-3">
-                        <h3 class="text-lg font-medium text-red-800">
-                            Import Errors ({{ $page.props.flash.import_errors.length }})
-                        </h3>
-                        <button 
-                            @click="clearErrors"
-                            class="text-red-600 hover:text-red-800 text-sm font-medium"
-                        >
-                            Dismiss
-                        </button>
+            <!-- Import Statistics -->
+            <div v-if="$page.props.flash.import_stats" class="mb-6 bg-blue-50 border border-blue-200 rounded-md p-4">
+                <h3 class="text-lg font-medium text-blue-800 mb-3">Import Statistics</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-600">{{ $page.props.flash.import_stats.imported || 0 }}</div>
+                        <div class="text-blue-700">New Records</div>
                     </div>
-                    
-                    <div class="space-y-3 max-h-96 overflow-y-auto">
-                        <div 
-                            v-for="(error, index) in $page.props.flash.import_errors" 
-                            :key="index"
-                            class="bg-white border border-red-200 rounded p-3"
-                        >
-                            <div class="flex justify-between items-start mb-2">
-                                <span class="font-medium text-red-700">
-                                    File: {{ error.file }}
-                                </span>
-                                <span class="text-sm text-red-600 bg-red-100 px-2 py-1 rounded">
-                                    Row {{ error.row }}
-                                </span>
-                            </div>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                                <div>
-                                    <span class="font-medium">Field:</span> 
-                                    <span class="text-red-600 ml-1">{{ formatFieldName(error.attribute) }}</span>
-                                </div>
-                                <div>
-                                    <span class="font-medium">Value:</span> 
-                                    <span class="text-gray-600 ml-1">{{ error.values[error.attribute] || 'N/A' }}</span>
-                                </div>
-                            </div>
-                            
-                            <div class="mt-2">
-                                <span class="font-medium text-red-700">Error:</span>
-                                <ul class="list-disc list-inside mt-1">
-                                    <li v-for="(err, errIndex) in error.errors" :key="errIndex" class="text-red-600 text-sm">
-                                        {{ err }}
-                                    </li>
-                                </ul>
-                            </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-yellow-600">{{ $page.props.flash.import_stats.updated || 0 }}</div>
+                        <div class="text-blue-700">Updated Records</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-red-600">{{ $page.props.flash.import_stats.failed || 0 }}</div>
+                        <div class="text-blue-700">Failed Records</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-600">{{ $page.props.flash.import_stats.total_processed || 0 }}</div>
+                        <div class="text-blue-700">Total Processed</div>
+                    </div>
+                </div>
+                
+                <!-- Summary Message -->
+                <div class="mt-3 p-3 bg-white rounded border">
+                    <h4 class="font-medium text-blue-800 mb-2">Summary:</h4>
+                    <div class="space-y-1 text-sm">
+                        <div v-if="$page.props.flash.import_stats.imported > 0" class="flex items-center text-green-700">
+                            <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                            {{ $page.props.flash.import_stats.imported }} new records added to database
                         </div>
-                    </div>
-                    
-                    <div class="mt-3 text-sm text-red-600">
-                        <p>Please fix these errors in your Excel file and try importing again.</p>
+                        <div v-if="$page.props.flash.import_stats.updated > 0" class="flex items-center text-yellow-700">
+                            <span class="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
+                            {{ $page.props.flash.import_stats.updated }} existing records updated
+                        </div>
+                        <div v-if="$page.props.flash.import_stats.failed > 0" class="flex items-center text-red-700">
+                            <span class="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                            {{ $page.props.flash.import_stats.failed }} records failed to import (see errors below)
+                        </div>
+                        <div class="flex items-center text-blue-700">
+                            <span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                            Processed {{ $page.props.flash.import_stats.files_count }} file(s)
+                        </div>
                     </div>
                 </div>
             </div>
+<!-- Updated Import Errors Section -->
+<div v-if="$page.props.flash && $page.props.flash.import_errors && $page.props.flash.import_errors.length > 0" class="mb-6">
+    <div class="bg-red-50 border border-red-200 rounded-md p-4">
+        <div class="flex justify-between items-center mb-3">
+            <h3 class="text-lg font-medium text-red-800">
+                Import Errors & Skipped Records ({{ $page.props.flash.import_errors.length }})
+            </h3>
+            <div class="space-x-2">
+                <button 
+                    @click="exportErrors"
+                    class="text-sm bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                >
+                    Export Errors
+                </button>
+                <button 
+                    @click="clearErrors"
+                    class="text-red-600 hover:text-red-800 text-sm font-medium"
+                >
+                    Dismiss
+                </button>
+            </div>
+        </div>
+        
+        <!-- Affected Clients Summary -->
+        <div class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div class="flex items-start">
+                <span class="text-yellow-600 mr-2 mt-0.5">⚠️</span>
+                <div>
+                    <h4 class="font-medium text-yellow-800 mb-2">Affected Clients with Zero/Negative Budgets:</h4>
+                    <div class="text-sm text-yellow-700">
+                        <p class="mb-2">The following clients were skipped due to invalid budget values (zero or negative):</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-40 overflow-y-auto">
+                            <div v-for="client in getAffectedClients()" :key="client" class="flex items-center">
+                                <span class="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
+                                <span class="text-yellow-800">{{ client }}</span>
+                            </div>
+                        </div>
+                        <p class="mt-2 text-xs">Total affected clients: {{ getAffectedClients().length }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="space-y-4 max-h-96 overflow-y-auto">
+            <div 
+                v-for="(error, index) in $page.props.flash.import_errors" 
+                :key="index"
+                class="bg-orange-50 border border-orange-200 rounded-lg p-4"
+            >
+                <!-- Header with File and Row Info -->
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center">
+                        <span class="text-orange-600 mr-2">⏭️</span>
+                        <span class="font-medium text-orange-800">Skipped Record</span>
+                        <span class="text-sm text-orange-600 ml-3">
+                            File: <strong>{{ error.file }}</strong>
+                        </span>
+                    </div>
+                    <span class="text-sm bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                        Row {{ error.row_index || error.row || 'N/A' }}
+                    </span>
+                </div>
 
+                <!-- Record Details -->
+                <div class="bg-white rounded-lg p-3 border border-orange-100 mb-3">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                        <!-- Client -->
+                        <div class="flex flex-col">
+                            <span class="text-xs text-gray-500 font-medium mb-1">CLIENT</span>
+                            <span class="font-semibold text-gray-800">
+                                {{ getClientFromError(error) }}
+                            </span>
+                        </div>
+                        
+                        <!-- Agency -->
+                        <div class="flex flex-col">
+                            <span class="text-xs text-gray-500 font-medium mb-1">AGENCY</span>
+                            <span class="text-gray-700">
+                                {{ getAgencyFromError(error) }}
+                            </span>
+                        </div>
+                        
+                        <!-- Budget -->
+                        <div class="flex flex-col">
+                            <span class="text-xs text-gray-500 font-medium mb-1">BUDGET</span>
+                            <span class="font-mono text-red-600">
+                                ${{ formatBudget(getBudgetFromError(error)) }}
+                            </span>
+                        </div>
+                        
+                        <!-- Platform -->
+                        <div class="flex flex-col">
+                            <span class="text-xs text-gray-500 font-medium mb-1">PLATFORM</span>
+                            <span class="text-gray-700">
+                                {{ getPlatformFromError(error) }}
+                            </span>
+                        </div>
+                        
+                        <!-- Country -->
+                        <div class="flex flex-col">
+                            <span class="text-xs text-gray-500 font-medium mb-1">COUNTRY</span>
+                            <span class="text-gray-700">
+                                {{ getCountryFromError(error) }}
+                            </span>
+                        </div>
+                        
+                        <!-- Year -->
+                        <div class="flex flex-col">
+                            <span class="text-xs text-gray-500 font-medium mb-1">YEAR</span>
+                            <span class="text-gray-700">
+                                {{ getYearFromError(error) }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error Reason -->
+                <div class="bg-red-50 rounded-lg p-3 border border-red-200">
+                    <div class="flex items-start">
+                        <span class="text-red-500 mr-2 mt-0.5">❌</span>
+                        <div>
+                            <span class="font-medium text-red-800 block mb-1">Reason for Skipping:</span>
+                            <p class="text-red-700 text-sm">
+                                {{ error.errors?.[0] || 'Unknown error' }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+ 
+    </div>
+</div>
             <!-- Header -->
             <div class="flex justify-between items-center mb-6">
                 <h1 class="text-3xl font-bold text-gray-800">Analytics Records</h1>
@@ -242,8 +375,6 @@
                         </select>
                     </div>
 
-        
-
                     <!-- Empty column to maintain layout -->
                     <div></div>
                 </div>
@@ -286,7 +417,7 @@
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Country
                                 </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                                <th class="px-6-py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                                     @click="sortByDate">
                                     <div class="flex items-center">
                                         Year
@@ -371,7 +502,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head } from '@inertiajs/vue3';
-import { ref, watch, onMounted, computed } from 'vue';
+import { ref, watch, onMounted } from 'vue';
 import { useForm, usePage, Link, router } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -421,9 +552,6 @@ const form = useForm({
 const exportForm = useForm({});
 const clearAllForm = useForm({});
 
-// Available years (you can generate this dynamically from your data)
-const availableYears = ref([2023, 2024, 2025, 2026]);
-
 // Filters
 const filters = ref({
     search: props.filters?.search || '',
@@ -436,6 +564,125 @@ const filters = ref({
     max_budget: props.filters?.max_budget || '',
     year: props.filters?.year || '',
 });
+
+// ========== ERROR DISPLAY METHODS ==========
+const getClientFromError = (error) => {
+    if (error.values?.client_name) return error.values.client_name;
+    if (error.values?.client) return error.values.client;
+    return 'Unknown Client';
+};
+
+const getAgencyFromError = (error) => {
+    const agency = error.values?.agency_name || error.values?.agency;
+    return formatAgency(agency) || 'Direct';
+};
+
+const getBudgetFromError = (error) => {
+    return error.values?.budget || error.values?.budget_amount || 0;
+};
+
+const getPlatformFromError = (error) => {
+    return error.values?.platform || 'Unknown Platform';
+};
+
+const getCountryFromError = (error) => {
+    return error.values?.country || 'Unknown Country';
+};
+
+const getYearFromError = (error) => {
+    return error.values?.date || 'Unknown Year';
+};
+
+const formatAgency = (agency) => {
+    if (!agency || agency === 'direct' || agency === 'Unknown Agency') {
+        return 'Direct';
+    }
+    return agency;
+};
+
+const formatBudget = (budget) => {
+    if (!budget && budget !== 0) return '0.00';
+    
+    const numericBudget = typeof budget === 'string' ? parseFloat(budget) : budget;
+    
+    return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(numericBudget);
+};
+
+const clearErrors = () => {
+    router.reload();
+};
+
+// ========== AFFECTED CLIENTS METHODS ==========
+const getAffectedClients = () => {
+    const errors = usePage().props.flash.import_errors;
+    if (!errors || errors.length === 0) return [];
+    
+    const clients = new Set();
+    errors.forEach(error => {
+        const client = getClientFromError(error);
+        if (client && client !== 'Unknown Client') {
+            clients.add(client);
+        }
+    });
+    
+    return Array.from(clients).sort();
+};
+
+const getAffectedClientsSummary = () => {
+    const affectedClients = getAffectedClients();
+    if (affectedClients.length === 0) return '';
+    
+    if (affectedClients.length <= 5) {
+        return affectedClients.join(', ');
+    } else {
+        return `${affectedClients.slice(0, 5).join(', ')} and ${affectedClients.length - 5} more...`;
+    }
+};
+
+// Enhanced export function to include all affected clients
+const exportErrors = () => {
+    const errors = usePage().props.flash.import_errors;
+    if (!errors || errors.length === 0) return;
+    
+    const errorData = errors.map(error => ({
+        'File': error.file,
+        'Row': error.row_index || error.row || 'N/A',
+        'Client': getClientFromError(error),
+        'Agency': getAgencyFromError(error),
+        'Budget': `$${formatBudget(getBudgetFromError(error))}`,
+        'Platform': getPlatformFromError(error),
+        'Country': getCountryFromError(error),
+        'Year': getYearFromError(error),
+        'Error Reason': error.errors?.[0] || 'Unknown error'
+    }));
+    
+    // Add summary sheet data
+    const summaryData = getAffectedClients().map(client => ({
+        'Affected Client': client,
+        'Status': 'Skipped - Zero/Negative Budget',
+        'Action Required': 'Update budget value in source file'
+    }));
+    
+    // Create CSV content for errors
+    const headers = ['File', 'Row', 'Client', 'Agency', 'Budget', 'Platform', 'Country', 'Year', 'Error Reason'];
+    const csvContent = "data:text/csv;charset=utf-8," 
+        + headers.join(',') + "\n"
+        + errorData.map(e => 
+            `"${e.File}","${e.Row}","${e.Client}","${e.Agency}","${e.Budget}","${e.Platform}","${e.Country}","${e.Year}","${e['Error Reason']}"`
+          ).join("\n");
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `import_errors_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+// ========== END ERROR DISPLAY METHODS ==========
 
 // Watch for filter changes
 watch(filters, (newFilters) => {
@@ -562,29 +809,9 @@ const resetFilters = () => {
     };
 };
 
-// Other methods
-const clearErrors = () => {
-    router.reload();
-};
-
-const formatFieldName = (field) => {
-    const fieldMap = {
-        'client': 'Client',
-        'agency': 'Agency',
-        'budget': 'Budget',
-        'platform': 'Platform',
-        'country': 'Country',
-        'date': 'Year',
-        'General': 'General Error'
-    };
-    return fieldMap[field] || field;
-};
-
-const formatAgency = (agency) => {
-    if (!agency || agency === 'direct' || agency === 'Unknown Agency') {
-        return 'Direct';
-    }
-    return agency;
+// Flash message handling
+const clearFlash = (type) => {
+    router.reload({ only: ['flash'] });
 };
 
 const getAgencyBadgeClass = (agency) => {
@@ -639,17 +866,6 @@ const exportData = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-};
-
-const formatBudget = (budget) => {
-    if (!budget && budget !== 0) return '0.00';
-    
-    const numericBudget = typeof budget === 'string' ? parseFloat(budget) : budget;
-    
-    return new Intl.NumberFormat('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(numericBudget);
 };
 
 const getPlatformBadgeClass = (platform) => {
