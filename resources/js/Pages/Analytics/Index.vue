@@ -3,7 +3,7 @@
 
     <AuthenticatedLayout>
         <div class="container mx-auto p-6">
-            <!-- Flash Messages -->
+
             <div v-if="$page.props.flash.success" class="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
                 <button 
                     @click="clearFlash('success')"
