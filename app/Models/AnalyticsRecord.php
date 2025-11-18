@@ -15,7 +15,7 @@ class AnalyticsRecord extends Model
         'platform',
         'country',
         'date',
-        'source_file' // Add this
+        'source_file' 
     ];
 
     protected $casts = [

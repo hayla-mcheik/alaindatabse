@@ -20,4 +20,6 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
-    })->create();
+    })
+    ->create()
+    ->usePublicPath(__DIR__); // Add this line to set public path to current directory

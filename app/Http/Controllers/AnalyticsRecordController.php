@@ -16,7 +16,7 @@ class AnalyticsRecordController extends Controller
     {
         $query = AnalyticsRecord::query();
 
-        // Apply filters (your existing filter code remains the same)
+       
         if ($request->has('platform') && $request->platform) {
             $query->where('platform', $request->platform);
         }
@@ -133,9 +133,6 @@ class AnalyticsRecordController extends Controller
             ->distinct()
             ->pluck('agency');
 
-        // REMOVED: $date variable - it was undefined
-        // If you need dates for filtering, you can add:
-        // $dates = AnalyticsRecord::distinct()->pluck('date');
 
         return Inertia::render('Analytics/Index', [
             'records' => $records,
@@ -153,7 +150,7 @@ class AnalyticsRecordController extends Controller
                 'budget_tier',
                 'min_budget',
                 'max_budget',
-                'date' // Added date to filters
+                'date' 
             ]),
             'sort' => $sortField,
             'direction' => $sortDirection
