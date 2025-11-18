@@ -261,14 +261,15 @@
                         </button>
 
                         <!-- FIXED: Use route helper for export -->
-                        <Link 
-                            :href="route('analytics.export') + getFilterQueryString()"
-                            method="get"
-                            as="button"
-                            class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:bg-green-700 active:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
-                        >
-                            Export Data
-                        </Link>
+                  <button 
+        type="button"
+        @click="exportData"
+        :disabled="exportForm.processing"
+        class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:bg-green-700 active:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
+    >
+        <span v-if="exportForm.processing">Exporting...</span>
+        <span v-else>Export Data</span>
+    </button>
                     </div>
                 </form>
             </div>
@@ -841,6 +842,7 @@ const submit = () => {
 const exportData = () => {
     const params = new URLSearchParams();
     
+    // Add filters to params
     Object.keys(filters.value).forEach(key => {
         if (filters.value[key]) {
             if (Array.isArray(filters.value[key])) {
@@ -853,15 +855,24 @@ const exportData = () => {
         }
     });
 
-    const url = route('analytics.export') + '?' + params.toString();
+    // Add sorting to params
+    params.append('sort', sortField.value);
+    params.append('direction', sortDirection.value);
+
+    // Create the export URL
+    const exportUrl = route('analytics.export') + '?' + params.toString();
     
+    console.log('Export URL:', exportUrl); // Debug log
+    
+    // Create and trigger download
     const link = document.createElement('a');
-    link.href = url;
+    link.href = exportUrl;
     link.setAttribute('download', 'true');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 };
+
 
 const getPlatformBadgeClass = (platform) => {
     if (!platform) return 'bg-gray-100 text-gray-800';

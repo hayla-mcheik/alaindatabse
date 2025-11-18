@@ -22,4 +22,4 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->create()
-    ->usePublicPath(__DIR__); // Add this line to set public path to current directory
+    ->usePublicPath(dirname(__DIR__)); // Set public path to project root
