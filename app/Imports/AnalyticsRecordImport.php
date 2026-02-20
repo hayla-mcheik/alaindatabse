@@ -244,69 +244,95 @@ class AnalyticsRecordImport implements ToModel, WithHeadingRow, WithValidation, 
         ];
     }
 
-    private function extractDate(array $row)
-    {
-        $possibleKeys = [
-            'date', 'transaction_date', 'report_date', 'period', 
-            'month', 'year', 'time_period', 'date_range'
-        ];
-        
-        $dateValue = $this->getValue($row, $possibleKeys, null);
-        return $this->normalizeDate($dateValue);
+private function extractDate(array $row)
+{
+    $possibleKeys = [
+        'date', 'transaction_date', 'report_date', 'period', 
+        'month', 'year', 'time_period', 'date_range'
+    ];
+    
+    $dateValue = $this->getValue($row, $possibleKeys, null);
+    
+    // If the value is "Unknown Year" or similar, treat as null to trigger default
+    if (is_string($dateValue) && (str_contains($dateValue, 'Unknown') || str_contains($dateValue, 'unknown'))) {
+        \Log::info('Found "Unknown Year" value, will default to 2025');
+        return null; // This will trigger the default in normalizeDate()
+    }
+    
+    return $this->normalizeDate($dateValue);
+}
+
+  private function normalizeDate($dateValue)
+{
+    // If the date is missing, invalid, or "Unknown Year", default to 2025-01-01
+    if (is_null($dateValue) || $dateValue === '' || $dateValue === 'NULL' || $dateValue === 'Unknown Year' || $dateValue === 'Unknown') {
+        \Log::info('Using default date 2025-01-01 for missing/invalid date');
+        return Carbon::createFromDate(2025, 1, 1)->startOfDay();
     }
 
-    private function normalizeDate($dateValue)
-    {
-        if (is_null($dateValue) || $dateValue === '' || $dateValue === 'NULL') {
-            return null;
+    try {
+        // Handle numeric years like 2025
+        if (is_numeric($dateValue)) {
+            $year = intval($dateValue);
+            // If it's a reasonable year (between 2000 and current year + 1)
+            if ($year >= 2000 && $year <= (date('Y') + 1)) {
+                return Carbon::createFromDate($year, 1, 1)->startOfYear();
+            }
         }
 
-        try {
-            // Handle numeric years like 2025
-            if (is_numeric($dateValue)) {
-                $year = intval($dateValue);
-                // If it's a reasonable year (between 2000 and current year + 1)
-                if ($year >= 2000 && $year <= (date('Y') + 1)) {
-                    return Carbon::createFromDate($year, 1, 1); // Default to Jan 1 of that year
-                }
+        // Handle Excel serial date numbers
+        if (is_numeric($dateValue) && $dateValue > 1000) {
+            return Carbon::createFromDate(1900, 1, 1)->addDays(intval($dateValue) - 2);
+        }
+
+        // Handle string dates
+        if (is_string($dateValue)) {
+            // Skip "Unknown" strings and default to 2025
+            if (str_contains($dateValue, 'Unknown') || str_contains($dateValue, 'unknown')) {
+                \Log::info('Unknown date string found, defaulting to 2025-01-01');
+                return Carbon::createFromDate(2025, 1, 1)->startOfDay();
             }
 
-            // Handle Excel serial date numbers (like 44927)
-            if (is_numeric($dateValue) && $dateValue > 1000) {
-                return Carbon::createFromDate(1900, 1, 1)->addDays(intval($dateValue) - 2);
-            }
+            $formats = [
+                'Y-m-d',
+                'Y/m/d',
+                'd-m-Y',
+                'd/m/Y',
+                'm-d-Y',
+                'm/d/Y',
+                'Y',
+                'Y-m',
+            ];
 
-            // Handle string dates
-            if (is_string($dateValue)) {
-                // Try different date formats
-                $formats = [
-                    'Y-m-d',
-                    'Y/m/d',
-                    'd-m-Y',
-                    'd/m/Y',
-                    'm-d-Y',
-                    'm/d/Y',
-                    'Y',
-                    'Y-m',
-                ];
-
-                foreach ($formats as $format) {
+            foreach ($formats as $format) {
+                try {
                     $date = Carbon::createFromFormat($format, $dateValue);
                     if ($date !== false) {
                         return $date;
                     }
+                } catch (\Exception $e) {
+                    continue;
                 }
-
-                // If none of the formats work, try Carbon's parser
-                return Carbon::parse($dateValue);
             }
 
-            return null;
-        } catch (\Exception $e) {
-            \Log::warning("Could not parse date: {$dateValue}. Error: " . $e->getMessage());
-            return null;
+            // Try Carbon's parser
+            try {
+                return Carbon::parse($dateValue);
+            } catch (\Exception $e) {
+                \Log::warning("Could not parse date string: {$dateValue}, defaulting to 2025-01-01");
+                return Carbon::createFromDate(2025, 1, 1)->startOfDay();
+            }
         }
+
+        // If we get here, default to 2025
+        \Log::info('Unhandled date format, defaulting to 2025-01-01');
+        return Carbon::createFromDate(2025, 1, 1)->startOfDay();
+        
+    } catch (\Exception $e) {
+        \Log::warning("Error parsing date: {$dateValue}. Error: " . $e->getMessage() . ". Defaulting to 2025-01-01");
+        return Carbon::createFromDate(2025, 1, 1)->startOfDay();
     }
+}
 
     private function determinePlatformFromFilename($filename)
     {

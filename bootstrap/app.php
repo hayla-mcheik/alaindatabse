@@ -20,6 +20,4 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
-    })
-    ->create()
-    ->usePublicPath(dirname(__DIR__)); // Set public path to project root
+    })->create();

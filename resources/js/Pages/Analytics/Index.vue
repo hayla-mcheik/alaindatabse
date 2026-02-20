@@ -242,7 +242,7 @@
                             class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                         />
                         <p class="text-sm text-gray-500 mt-1">
-                            Supported platforms: Google, Snap, TikTok, Meta, Twitter
+                            Supported platforms: Google, Snap, TikTok
                         </p>
                         <div v-if="form.errors.files" class="text-red-600 text-sm mt-1">
                             {{ form.errors.files }}
@@ -390,6 +390,7 @@
                     >
                         Reset Filters
                     </button>
+      
                 </div>
             </div>
 
